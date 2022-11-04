@@ -3,7 +3,7 @@ package Data
 import org.apache.logging.log4j.Level.values
 import org.apache.logging.log4j.core.lookup.StrSubstitutor.replace
 import org.apache.spark.sql.catalyst.dsl.expressions.StringToAttributeConversionHelper
-import org.apache.spark.sql.functions.{avg, col, count, expr, from_unixtime, hour, length, lit, max, mean, min, month, regexp_replace, round, split, stddev, stddev_pop, stddev_samp, sum, to_date, to_timestamp, unix_timestamp, when, year}
+import org.apache.spark.sql.functions.{avg, col, column, count, expr, from_unixtime, hour, length, lit, max, mean, min, month, regexp_replace, round, split, stddev, stddev_pop, stddev_samp, sum, to_date, to_timestamp, unix_timestamp, when, year}
 import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType, StructField, StructType, TimestampType}
 import org.apache.spark.sql.{Column, DataFrame, Row, SaveMode, SparkSession}
 
@@ -21,30 +21,31 @@ object Ingesta extends App {
     .option("inferSchema", "true")
     .option("header", "true")
     .option("sep", ",")
-    .option("nullValue","no aplica")
+    .option("nullValue", "no aplica")
     .csv("src/main/resources/prueba.csv")
-  Community.show()
 
   val tripsDF =
-  spark.read
-    .option("inferSchema", "true")
-    .option("header","true")
-    .option("sep", ",")
-    .option("quote", """ """)
-    .option("nullValue","no aplica")
-    .option("multiline","true")
-    .option("escape",""" """)
-    .csv("src/main/resources/.csv")
-
-  val TripSampleDF = tripsDF.sample(fraction = 0.10)
+    spark.read
+      .option("inferSchema", "true")
+      .option("header", "true")
+      .option("sep", ",")
+      .csv("src/main/resources/Taxi_Trips_-_2019.csv")
+  //tripsDF.show()
 
   //Eda
 
-  println("There is " + TripSampleDF.count() + " Rows in the dataset")
-  println("There is " + TripSampleDF.distinct().count() + "Unique Row in the dataset")
-  println("there is "+ TripSampleDF.columns.size + " Number of Columns")
+  println("There is " + tripsDF.count() + " Rows in the dataset")
+  println("There is " + tripsDF.distinct().count() + "Unique Row in the dataset")
+  println("there is "+ tripsDF.columns.size + " Number of Columns")
+  val stas_df = tripsDF.select(
+    mean("Trip Total").as("mean"),
+    stddev("Trip Total").as("Stddev"),
+    min("Trip Total").as("min"),
+    max("Trip Total").as("max")
+  )
+  stas_df.show()
 
-  /*
+
   def countCols(columns: Array[String]): Array[Column] = {
     columns.map(c => {
       count(col(c)).alias(c)
@@ -57,40 +58,34 @@ object Ingesta extends App {
     })
   }
 
-
   val cantidad_columnas = tripsDF.select(countCols(tripsDF.columns): _*)
   val cantidad_Nulls = tripsDF.select(countColsNulls(tripsDF.columns): _*)
   val Quantities = cantidad_columnas.union(cantidad_Nulls)
 
   Quantities.show()
 
-  //Sample
-
-  val tripSampleDF = tripsDF.sample(fraction = 0.20)
-
-  println(tripSampleDF.count())
 
 
   //Data Preparation
 
-  val tripsdf2 = tripSampleDF
-       .withColumn("Trip Miles",col("Trip Miles").cast(DoubleType))
-       .withColumn("Trip Start Timestamp",unix_timestamp(col("Trip Start Timestamp"),"MM/dd/yyyy hh:mm:ss a").cast(TimestampType))
-       .withColumn("Trip End Timestamp",unix_timestamp(col("Trip End Timestamp"),"MM/dd/yyyy hh:mm:ss a").cast(TimestampType))
-       .withColumn("Trip Seconds",regexp_replace(col("Trip Seconds"), ",", ""))
-       .withColumn("Trip Seconds",col("Trip Seconds").cast(IntegerType))
+  val tripsdf2 = tripsDF
+    .withColumn("Trip Miles",col("Trip Miles").cast(DoubleType))
+    .withColumn("Trip Start Timestamp",unix_timestamp(col("Trip Start Timestamp"),"MM/dd/yyyy hh:mm:ss a").cast(TimestampType))
+    .withColumn("Trip End Timestamp",unix_timestamp(col("Trip End Timestamp"),"MM/dd/yyyy hh:mm:ss a").cast(TimestampType))
+    .withColumn("Trip Seconds",regexp_replace(col("Trip Seconds"), ",", ""))
+    .withColumn("Trip Seconds",col("Trip Seconds").cast(IntegerType))
 
-    tripsdf2.show()
-    tripsdf2.printSchema()
+  //tripsdf2.show()
+  //tripsdf2.printSchema()
 
- //Aggregations
-      val tripsdf3 = tripsdf2
-        .withColumn("Price X Minute",round(col("Fare")/col("new Trip Seconds")*60,2))
-        .withColumn("Price X Mile",round(col("Fare")/col("Trip Miles"),2))
-   tripsdf3.show()
+  //Aggregations
+  val tripsdf3 = tripsdf2
+    .withColumn("Price X Minute",round(col("Fare")/col("Trip Seconds")*60,2))
+    .withColumn("Price X Mile",round(col("Fare")/col("Trip Miles"),2))
+  // tripsdf3.show()
 
 
-   // Data cleanising
+  // Data cleanising
 
   val tripsdf4 = tripsdf3.filter(col("Trip Seconds").isNotNull && col("Trip Miles").isNotNull
     && col("Trip Total").isNotNull)
@@ -100,61 +95,64 @@ object Ingesta extends App {
       && col("Trip Total") =!= 0)
 
   val DfCleaned = tripsdf3.filter(col("Trip Seconds").isNull && col("Trip Miles").isNull
-       && col("Trip Total").isNull)
+    && col("Trip Total").isNull)
 
   val dfCleaned_2 = tripsdf3
     .filter(col("Trip Seconds") === 0  && col("Trip Miles") === 0
       && col("Trip Total") === 0)
 
-// Insights for trashed data
-   DfCleaned.show()
-   println("There is " + DfCleaned.count() + " Rows")
-   dfCleaned_2.show()
-   println("There is " + dfCleaned_2.count() + " Rows")
-   dfCleaned_2.printSchema()
-// Company with Trips truncateds
-   val lowDf = dfCleaned_2.groupBy("Company")
-     .agg(count("*").as("total_trips"))
-     .orderBy(col("total_trips").desc_nulls_last)
-
-   lowDf.show()
+  // Insights for trashed data
+  DfCleaned.show()
+  println("There is " + DfCleaned.count() + " Rows")
+  dfCleaned_2.show()
+  println("There is " + dfCleaned_2.count() + " Rows")
 
 
-   //Outliers
-     val quantiles = tripsdf5.stat.approxQuantile("Trip Total",
-       Array(0.25, 0.75), 0.0)
-     val Q1 = quantiles(0)
-     val Q3 = quantiles(1)
-     val IQR = Q3 - Q1
 
-     val lowerRange = Q1 - 1.5 * IQR
-     val upperRange = Q3 + 1.5 * IQR
 
-     val outliers = tripsdf5.filter(s"Trip Total < $lowerRange or Trip Total > $upperRange")
-     outliers.show()
-     println("There is "+ outliers.count() + "atypical rows in relation to the Trip Total column")
+  //Company with Trips truncateds
+  val lowDf = dfCleaned_2.groupBy("Company")
+    .agg(count("*").as("total_trips"))
+    .orderBy(col("total_trips").desc_nulls_last)
 
-     //which company is more benefited with the cancellation charges
-     val charguesDF = tripsdf5
-       .filter(col("Trip Miles") === 0 && col("new Trip Seconds") === 0 )
-       .groupBy("Company").agg(sum("Trip Total").as("Trip_Total"))
-       .orderBy(col("Trip_Total").desc_nulls_last)
-     charguesDF.show()
+  //lowDf.show()
 
-     //Pick Hours
-     val pickupsHoursDF = tripsdf5
-       .withColumn("Hour of the day",hour(col("Trip End Timestamp V2")))
-       .groupBy("Hour of the day")
-       .agg(count("*").as("TotalTrips"))
-       .orderBy(col("TotalTrips").desc_nulls_last)
+  //Outliers
+  val quantiles = tripsdf5.stat.approxQuantile("Fare",
+    Array(0.25, 0.75), 0.0)
+  val Q1 = quantiles(0)
+  val Q3 = quantiles(1)
+  val IQR = Q3 - Q1
 
-       pickupsHoursDF.show()
+  val lowerRange = Q1 - 1.5 * IQR
+  val upperRange = Q3 + 1.5 * IQR
 
-    // Pickups Community Area with most trips
-    val Community_trips_picksDf = tripsdf5.groupBy("Pickup Community Area")
-      .agg(count("*").as("total_trips"))
-      .join(Community,col("Id_Com") === col("Pickup Community Area"))
-      .orderBy(col("total_trips").desc_nulls_last)
+  val outliers = tripsdf5.filter(s"Fare < $lowerRange or Fare > $upperRange")
+  outliers.show()
+  println("There is "+ outliers.count() + " atypical rows in relation to the Trip Total column")
+
+  //which company is more benefited with the cancellation charges
+  val charguesDF = tripsdf3
+    .filter(col("Trip Miles") === 0 && col("Trip Seconds") === 0.0)
+    .groupBy("Company").agg(round(sum("Trip Total"),2).as("Trip_Total"))
+    .orderBy(col("Trip_Total").desc_nulls_last)
+  charguesDF.show()
+
+  //Pick Hours
+  val pickupsHoursDF = tripsdf5
+    .withColumn("Hour of the day",hour(col("Trip End Timestamp")))
+    .groupBy("Hour of the day")
+    .agg(count("*").as("TotalTrips"))
+    .orderBy(col("TotalTrips").desc_nulls_last)
+
+  pickupsHoursDF.show()
+
+
+  // Pickups Community Area with most trips
+  val Community_trips_picksDf = tripsdf5.groupBy("Pickup Community Area")
+    .agg(count("*").as("total_trips"))
+    .join(Community,col("Id_Com") === col("Pickup Community Area"))
+    .orderBy(col("total_trips").desc_nulls_last)
   Community_trips_picksDf.show()
 
   // Dropoff Community Area whit most trips
@@ -164,43 +162,42 @@ object Ingesta extends App {
     .orderBy(col("total_trips").desc_nulls_last)
   Community_trips_DropsDf.show()
 
-    // average price per miles and per minute grouped by year
+  // average price per miles and per minute grouped by year
 
-      val Year_AvgMinuteDF = tripsdf5
-        .withColumn("Year", year(col("Trip End Timestamp V2")))
-        .groupBy("Year")
-        .agg(round(avg("price x Minute"),2).as("Avg price x Minute"))
-        .orderBy(col("year").desc)
+  val Year_AvgMinuteDF = tripsdf5
+    .withColumn("Month",month(col("Trip End Timestamp")))
+    .groupBy("Month")
+    .agg(round(avg("price x Minute"),2).as("Avg price x Minute"))
+    .orderBy(col("Month").desc)
 
-      Year_AvgMinuteDF.show()
+  Year_AvgMinuteDF.show()
 
-      val Year_AvgMilesDF = tripsdf5
-        .withColumn("Year", year(col("Trip End Timestamp V2")))
-        .groupBy("Year")
-        .agg(round(avg("price x Mile"), 2).as("Avg price x Mile"))
-        //.agg(avg("price x Mile").as("Avg price x Mile"))
-        .orderBy(col("year").desc)
+  val Year_AvgMilesDF = tripsdf5
+    .withColumn("Month", month(col("Trip End Timestamp")))
+    .groupBy("Month")
+    .agg(round(avg("price x Mile"), 2).as("Avg price x Mile"))
 
-      Year_AvgMilesDF.show()
+    .orderBy(col("Month").desc)
 
-    //tips por company /quality service
-    val Company_service_qlty = tripsdf5
-      .groupBy("Company")
-      .agg(round(sum(col("Tips"))/sum(col("Trip Miles")),3).as("Ratio of tips"))
-      .orderBy(col("Ratio of tips").desc)
+  Year_AvgMilesDF.show()
+
+  //tips por company /quality service
+  val Company_service_qlty = tripsdf5
+    .groupBy("Company")
+    .agg(round(sum(col("Tips"))/sum(col("Trip Miles")),3).as("Ratio of tips"))
+    .orderBy(col("Ratio of tips").desc)
 
   Company_service_qlty.show()
 
 
-    //paymemt method per years
-    val Year_Payment_type = tripsdf5
-      .withColumn("Year", year(col("Trip End Timestamp V2")))
-      .groupBy("Year","Payment Type")
-      .agg(round(sum("Trip Total"),3).as("Trip Total"))
-      //.agg(avg("price x Mile").as("Avg price x Mile"))
-      .orderBy(col("year").desc,col("Trip Total").desc)
+  //paymemt method per month
+  val Year_Payment_type = tripsdf5
+    .withColumn("month", month(col("Trip End Timestamp")))
+    .groupBy("month","Payment Type")
+    .agg(round(sum("Trip Total"),3).as("Trip Total"))
+    .orderBy(col("month").desc,col("Trip Total").desc)
 
-    Year_Payment_type.show()
+  Year_Payment_type.show()
 
   //Long and Short Trip
 
@@ -211,5 +208,7 @@ object Ingesta extends App {
   tripsByLengthDF.show()
 
 
-   */
+
+
+
 }

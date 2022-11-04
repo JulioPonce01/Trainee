@@ -1,8 +1,9 @@
-# Trainee
+# Big Data Project of Taxi Trip in 2019 (Chicago)
 in this repository will be used for the big data trainee program
 
-# About the Dataset 
+# 1.About the Dataset 
 Taxi trips reported to the City of Chicago in its role as a regulatory agency. 
+Each Row is a trip
 To protect privacy but allow for aggregate analyses, the Taxi ID is consistent for any given taxi 
 medallion number but does not show the number, Census Tracts are suppressed in some cases, and times are rounded to the nearest 15 minutes.
 
@@ -33,10 +34,12 @@ medallion number but does not show the number, Census Tracts are suppressed in s
 |Dropoff Centroid Longitude|The longitude of the center of the dropoff census tract or the community area if the census tract has been hidden for privacy. This column often will be blank for locations outside Chicago.|
 |Dropoff Centroid Location|The location of the center of the dropoff census tract or the community area if the census tract has been hidden for privacy. This column often will be blank for locations outside Chicago.|
 
-### DATASET'S EDA 
+###  DATASET'S EDA 
 EDA (Exploratory Data Analysis) is the stepping stone of Data Science, and the process involves 
 investigating data and discovering underlying patterns in data. The EDA for this project is resolve 
-with this code : 
+with this code :
+It receives a Dataframe
+Obtain data to make some calculations for our firs stats in relation with the column Total Trip
 
 ``` SCALA
   println("There is " + tripsDF.count() + " Rows in the dataset")
@@ -49,16 +52,34 @@ with this code :
     max("Trip Total").as("max")
   )
   stas_df.show()
+  
+  
   +------------------+-----------------+---+-------+
 |              mean|           Stddev|min|    max|
 +------------------+-----------------+---+-------+
 |18.176876191216515|60.90924601547143|0.0|9900.54|
 +------------------+-----------------+---+-------+
   
-   def countCols(columns: Array[String]): Array[Column] = {
-  columns.map(c => {
-    count(col(c)).alias(c)
-  })
+
+
+```
+Results:
+
+* The number of rows analyzed were 16,477,365 rows and 23 columns.
+* The number of unique Rows were 16,477,365
+* we do not have duplicate Rows
+* The mean of Total Trip were 18.1
+* The Stddev of Total Trip were 60.1
+* the min of Total Trip were 0
+* the max of Total Trip were 9900.54
+
+
+After that firs Analysis , we need to know the number of null values in columns
+For this  exploratory analysis was made with a function that summarize numbers  of nulls by column in a given Dataframe. 
+The function works as follows:
+
+
+``` SCALA
 }
 
 def countColsNulls(columns: Array[String]): Array[Column] = {
@@ -73,9 +94,6 @@ val Quantities = cantidad_columnas.union(cantidad_Nulls)
 
 Quantities.show()
 
-As a result we have a table that in first rows has the number of register and in the second
-it has the count of the nulls 
-
 +--------+--------+--------------------+------------------+------------+----------+-------------------+--------------------+---------------------+----------------------+--------+--------+--------+--------+----------+------------+--------+------------------------+-------------------------+------------------------+-------------------------+--------------------------+--------------------------+
 | Trip ID| Taxi ID|Trip Start Timestamp|Trip End Timestamp|Trip Seconds|Trip Miles|Pickup Census Tract|Dropoff Census Tract|Pickup Community Area|Dropoff Community Area|    Fare|    Tips|   Tolls|  Extras|Trip Total|Payment Type| Company|Pickup Centroid Latitude|Pickup Centroid Longitude|Pickup Centroid Location|Dropoff Centroid Latitude|Dropoff Centroid Longitude|Dropoff Centroid  Location|
 +--------+--------+--------------------+------------------+------------+----------+-------------------+--------------------+---------------------+----------------------+--------+--------+--------+--------+----------+------------+--------+------------------------+-------------------------+------------------------+-------------------------+--------------------------+--------------------------+
@@ -83,10 +101,18 @@ it has the count of the nulls
 |       0|       0|                   0|               545|        2736|       550|            5595536|             5693141|              1237986|               1658649|    1571|    1571|  260012|    1571|      1571|           0|       0|                 1235952|                  1235952|                 1235952|                  1599600|                   1599600|                   1599600|
 +--------+--------+--------------------+------------------+------------+----------+-------------------+--------------------+---------------------+----------------------+--------+--------+--------+--------+----------+------------+--------+------------------------+-------------------------+------------------------+-------------------------+--------------------------+--------------------------+
 
-
 ```
+Results 
+* As a result we have a table that in first rows has the number of register and in the second
+it has the count of the nulls
+* most nulls are found in the columns that provide us with location coordinatesx|
+### How to execute the solution 
 
 ### Data Preparation
+To be able to work with the dataframe that we have obtained when reading our file that contains the data set, it is necessary to manipulate the following things:
+* Data Types
+* The characters inside the data
+
 ``` SCALA
 val tripsdf2 = tripsDF
        .withColumn("Trip Miles",col("Trip Miles").cast(DoubleType))
@@ -150,7 +176,11 @@ root
  |-- Dropoff Centroid  Location: string (nullable = true)
 
 ```
+Results:
+* As a result to the applied code we can see our new schema that contains data types in date and time
+* Characters that did not allow the cast from one data type to another have been eliminated
 
+After that, new columns have also been created from the existing ones that will help us for the subsequent analysis.
 
 ```SCALA
         val tripsdf3 = tripsdf2
@@ -171,6 +201,11 @@ root
 
 ```
 ### Data Cleansing
+The process of data cleansing was done by:
+
+* Delete Rows that have null values in the following fields: Total Trip , Trip Miles and Trip Seconds
+* Delete the columns that have values equal to zero in the following fields: Total Trip , Trip Miles and Trip Seconds
+
 ```SCALA
   val tripsdf4 = tripsdf3.filter(col("Trip Seconds").isNotNull && col("Trip Miles").isNotNull
     && col("Trip Total").isNotNull)
@@ -180,7 +215,7 @@ root
       && col("Trip Total") =!= 0)
 
 ```
-
+We have already filtered our data but let's see how many fields have been filtered by each of the criteria
 
 ```SCALA
   val DfCleaned = tripsdf3.filter(col("Trip Seconds").isNull && col("Trip Miles").isNull
@@ -232,8 +267,31 @@ only showing top 20 rows
 
 There is 5710 Rows
 ```
+Results 
+* As a result, it is obtained that by the first criterion only 1 has been eliminated.
+* With the second criterion, 5710 have been eliminated
 
 ### Outliers
+Outliers are data points in a dataset which stand far from other data points.
+Treating outliers is one of the main steps in data preparation in data science
+.The more the outliers you have in your dataset the more the skewness you have.
+
+In this project we ar going to use  “approxquantile” to calculate IQR
+
+If you arrange a dataset in order then the middle data pint is called Median ( or Q2 in the context of IQR).Then divide the dataset based on Median :
+
+Q1 is the middle of the first half (25%).
+
+Q3 is the middle of the second half(75%).
+
+The interquartile range (IQR) is = Q3 – Q1
+
+Once we found IQR,Q1,Q3 we compute the boundary and data points out of this boundary are potentially outliers:
+
+lower boundary : Q1 – 1.5*IQR
+
+upper boundary : Q3 + 1.5*IQR
+    
 ```SCALA
      //Outliers
 val quantiles = tripsdf5.stat.approxQuantile("Trip Total",
@@ -276,8 +334,10 @@ println("There is "+ outliers.count() + "atypical rows in relation to the Trip T
 
 There is 32328 atypical rows in the relation with Trip Total column
 ```
-
+Results 
+* There is 32328 atypical rows in the relation with Trip Total column
 ### Insights
+1.Top Companies with canceled trips
 ```SCALA
    // Company with Trips truncateds
 val lowDf = dfCleaned_2.groupBy("Company")
@@ -312,6 +372,9 @@ lowDf.show()
 only showing top 20 rows
 
 ```
+The report shows the top 20 company with the highest numbers of canceled trips, it is filtered by Trip Miles in 0 and Trips second in 0 . It is also ordered by the Trip_total by descending. The reports has been construct with the dataframe Tripsdf5
+
+2.Top companies benefited from the cancellation charge
 ```SCALA
      val charguesDF = tripsdf5
     .filter(col("Trip Miles") === 0 && col("Trip Seconds") === 0)
@@ -344,6 +407,11 @@ only showing top 20 rows
   |Patriot Taxi Dba ...|   2585.14|
   +--------------------+----------+
 ```
+The report shows the top 20 company with the highest numbers of Amount for trip cancellations , it is filtered by Trip Miles in 0 and Trips second in 0 . It is also ordered by the Trip_total by descending. The reports has been construct with the dataframe Tripsdf5
+
+
+
+2.What are the distribution of Taking a taxi Per Hour?
 ```SCALA
      //Pick Hours
      val pickupsHoursDF = tripsdf5
@@ -379,7 +447,9 @@ only showing top 20 rows
   |              2|    205537|
   +---------------+----------+
 ```
+This report shows the distribution of the Activity of taking taxi by hours. For this report we help by our column Trip Star timestamp .The result was a group by the counter and an order by hours in ascending order.
 
+3.Pickups Community Area with most trips
 ```SCALA
 // Pickups Community Area with most trips
 val Community_trips_picksDf = tripsdf5.groupBy("Pickup Community Area")
@@ -413,6 +483,8 @@ Community_trips_picksDf.show()
 +---------------------+-----------+------+---------------+
 only showing top 20 rows
 ```
+The report shows the count number of the pickup trips made by Community area , the report contains a inner join Between Community and tripsdf5
+4.Dropoff Community Area with most trips
 ```SCALA
 val Community_trips_DropsDf = tripsdf5.groupBy("Dropoff Community Area")
   .agg(count("*").as("total_trips"))
@@ -447,8 +519,11 @@ Community_trips_DropsDf.show()
 only showing top 20 rows
 
 ```
+The report shows the count number of the Dropoff trips made by Community area , the report contains a inner join Between Community and tripsdf5 
+
+5. Average price per Minute grouped by company
 ```SCALA
-val Year_AvgMinuteDF = tripsdf5
+val Month_AvgMinuteDF = tripsdf5
   .withColumn("Month",month(col("Trip End Timestamp")))
   .groupBy("Month")
   .agg(round(avg("price x Minute"),2).as("Avg price x Minute"))
@@ -470,15 +545,19 @@ val Year_AvgMinuteDF = tripsdf5
 |    2|              1.18|
 |    1|              1.26|
 +-----+------------------+
+
 ```
+The report shows the AVG price x minute of the trips by Company , the report contains a ratio the is calculated like Fare /Minutes .This gives us some information about the quality of service
+
+6. Average price per Mile grouped by company
 ```SCALA
-   val Year_AvgMilesDF = tripsdf5
+   val Month_AvgMilesDF = tripsdf5
   .withColumn("Month", month(col("Trip End Timestamp")))
   .groupBy("Month")
   .agg(round(avg("price x Mile"), 2).as("Avg price x Mile"))
   .orderBy(col("Month").desc)
 
-Year_AvgMilesDF.show()
+Month_AvgMilesDF.show()
 +-----+----------------+
 |Month|Avg price x Mile|
 +-----+----------------+
@@ -496,6 +575,9 @@ Year_AvgMilesDF.show()
 |    1|            11.0|
 +-----+----------------+
 ```
+The report shows the AVG price x Mile of the trips by Company , the report contains a ratio the is calculated like Fare /Miles .This gives us some information about the quality of service
+
+7.Ratios of tip by Company
 ```SCALA
              Company|Ratio of tips|
 +--------------------+-------------+
@@ -521,6 +603,9 @@ Year_AvgMilesDF.show()
 |4623 - 27290 Jay Kim|        0.489|
 +--------------------+-------------+
 ```
+The report shows the Ratio tips of the trips by Company , the report contains a ratio the is calculated like Trips /Miles .This gives us some information about the quality of service
+
+8.Paymemt method per month
 ```SCALA
 //paymemt method per month
 val Year_Payment_type = tripsdf5
@@ -555,6 +640,9 @@ Year_Payment_type.show()
   |   10|      Prcard|    298707.58|
   +-----+------------+-------------+
 ```
+The report shows the Amount of the trip total of the trips by Month and Payment type  , the report contains the sum of trip total 
+
+9 . Determine if the trip is short or long
 ```SCALA
 //Long and Short Trip
 
@@ -571,3 +659,4 @@ tripsByLengthDF.show()
 +------+--------+
 
 ```
+To make this report, a long Distance Threshold variable has been declared, which will be our parameter to determine if the trip is short or long. This parameter has been determined this way because it is the number of miles it takes to cross the city.

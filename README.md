@@ -45,34 +45,29 @@ Obtain data to make some calculations for our firs stats in relation with the co
   println("There is " + tripsDF.count() + " Rows in the dataset")
   println("There is " + tripsDF.distinct().count() + "Unique Row in the dataset")
   println("there is "+ tripsDF.columns.size + " Number of Columns")
-    val stas_df = tripsDF.select(
-    mean("Trip Total").as("mean"),
-    stddev("Trip Total").as("Stddev"),
-    min("Trip Total").as("min"),
-    max("Trip Total").as("max")
-  )
-  stas_df.show()
   
+  val stats_df = tripsDF.describe("Trip Seconds","Trip Miles","Fare","Tips","Tolls","Extras","Trip Total")
+  stats_df.show()   
   
-  +------------------+-----------------+---+-------+
-|              mean|           Stddev|min|    max|
-+------------------+-----------------+---+-------+
-|18.176876191216515|60.90924601547143|0.0|9900.54|
-+------------------+-----------------+---+-------+
-  
-
-
 ```
 Results:
 
 * The number of rows analyzed were 16,477,365 rows and 23 columns.
 * The number of unique Rows were 16,477,365
-* we do not have duplicate Rows
-* The mean of Total Trip were 18.1
-* The Stddev of Total Trip were 60.1
-* the min of Total Trip were 0
-* the max of Total Trip were 9900.54
+* we do not have duplicate Rows}
 
+As a result, we have a table that calculates basic statistics for some of our columns
+
+``` SCALA
+|summary|     Trip Seconds|        Trip Miles|             Fare|              Tips|               Tolls|            Extras|        Trip Total|
++-------+-----------------+------------------+-----------------+------------------+--------------------+------------------+------------------+
+    |  count|         16474629|          16476815|         16475794|          16475794|            16217353|          16475794|          16475794|
+|   mean|899.3781701548484|3.6881347675505527|14.90571680430084|1.8469760425506478|0.002052808494703...|1.2887584483030063|18.176876191216515|
+| stddev|1515.692561561734|6.1692506249533405|57.22805203530911| 3.085559492441786|  0.3099312802294819| 17.89913555984935| 60.90924601547143|
+|    min|                0|               0.0|              0.0|               0.0|                 0.0|               0.0|               0.0|
+|    max|            86400|           1428.97|          9900.49|            407.68|              960.68|            9555.0|           9900.54|
++-------+-----------------+------------------+-----------------+------------------+--------------------+------------------+------------------+
+```
 
 After that firs Analysis , we need to know the number of null values in columns
 For this  exploratory analysis was made with a function that summarize numbers  of nulls by column in a given Dataframe. 
@@ -105,7 +100,7 @@ Quantities.show()
 Results 
 * As a result we have a table that in first rows has the number of register and in the second
 it has the count of the nulls
-* most nulls are found in the columns that provide us with location coordinatesx|
+* most nulls are found in the columns that provide us with location coordinates
 ### How to execute the solution 
 
 ### Data Preparation
@@ -293,50 +288,64 @@ lower boundary : Q1 – 1.5*IQR
 upper boundary : Q3 + 1.5*IQR
     
 ```SCALA
-     //Outliers
-val quantiles = tripsdf5.stat.approxQuantile("Trip Total",
-  Array(0.25, 0.75), 0.0)
-val Q1 = quantiles(0)
-val Q3 = quantiles(1)
-val IQR = Q3 - Q1
+//Outliers
+package Helper
+import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 
-val lowerRange = Q1 - 1.5 * IQR
-val upperRange = Q3 + 1.5 * IQR
+import scala.collection.mutable
 
-val outliers = tripsdf5.filter(s"Fare < $lowerRange or Fare > $upperRange")
-outliers.show()
-println("There is "+ outliers.count() + "atypical rows in relation to the Trip Total column")
+object FunctionHelpers {
 
-  +--------------------+--------------------+--------------------+-------------------+------------+----------+-------------------+--------------------+---------------------+----------------------+------+-----+-----+------+----------+------------+--------------------+------------------------+-------------------------+------------------------+-------------------------+--------------------------+--------------------------+--------------+------------+
-  |             Trip ID|             Taxi ID|Trip Start Timestamp| Trip End Timestamp|Trip Seconds|Trip Miles|Pickup Census Tract|Dropoff Census Tract|Pickup Community Area|Dropoff Community Area|  Fare| Tips|Tolls|Extras|Trip Total|Payment Type|             Company|Pickup Centroid Latitude|Pickup Centroid Longitude|Pickup Centroid Location|Dropoff Centroid Latitude|Dropoff Centroid Longitude|Dropoff Centroid  Location|Price X Minute|Price X Mile|
-  +--------------------+--------------------+--------------------+-------------------+------------+----------+-------------------+--------------------+---------------------+----------------------+------+-----+-----+------+----------+------------+--------------------+------------------------+-------------------------+------------------------+-------------------------+--------------------------+--------------------------+--------------+------------+
-  |fcba761a77af45f37...|33c877ad242c484ce...| 2021-08-01 19:45:00|2019-08-01 20:30:00|        3180|      35.2|               null|                null|                   76|                    72| 84.75|18.75|  0.0|   8.5|     112.0| Credit Card|           U Taxicab|            41.980264315|            -87.913624596|    POINT (-87.913624...|             41.713148612|             -87.675075312|      POINT (-87.675075...|           1.6|        2.41|
-  |fbe0689a2626def82...|33435b1dc7eaa3d31...| 2021-08-15 00:30:00|2019-08-15 01:15:00|        2878|     35.85|               null|         17031980000|                 null|                    76|  86.5|  0.0|  0.0|   0.0|      86.5|        Cash|        City Service|                    null|                     null|                    null|              41.97907082|             -87.903039661|      POINT (-87.903039...|           1.8|        2.41|
-  |1691e7cda45d5e30d...|a35c437199f6c8815...| 2022-02-15 12:30:00|2019-02-15 13:15:00|        2725|     26.72|               null|                null|                 null|                    42| 64.25|  0.0|  0.0|   5.0|     69.75| Credit Card|            Sun Taxi|                    null|                     null|                    null|              41.77887686|             -87.594925439|      POINT (-87.594925...|          1.41|         2.4|
-  |ff4f7e6304dfe7fb1...|c9e0b487e0d5aef1d...| 2021-08-22 23:00:00|2019-08-22 23:45:00|        2640|      38.4|        17031980100|                null|                   56|                  null|  90.5|  0.0|  0.0|  50.0|     140.5| Credit Card|Star North Manage...|            41.785998518|            -87.750934289|    POINT (-87.750934...|                     null|                      null|                      null|          2.06|        2.36|
-  |fc5163eb78a0db541...|4a6999af87938af45...| 2021-08-02 00:30:00|2019-08-02 08:45:00|       29848|      0.38|        17031980000|         17031980000|                   76|                    76|169.25|  0.0|  0.0|   0.0|    169.25|        Cash|            Sun Taxi|             41.97907082|            -87.903039661|    POINT (-87.903039...|              41.97907082|             -87.903039661|      POINT (-87.903039...|          0.34|      445.39|
-  |ffd936e4be9ee230c...|884655d853cbe41e1...| 2021-08-24 03:45:00|2019-08-24 04:15:00|        2035|      29.7|               null|                null|                   45|                    76| 81.27|  0.0|  0.0|   0.0|     81.27|        Cash|           Flash Cab|            41.744199535|            -87.586348318|    POINT (-87.586348...|             41.980264315|             -87.913624596|      POINT (-87.913624...|           2.4|        2.74|
-  |fb1a8bb564fee5a90...|296cddcb1099b802d...| 2021-08-30 20:00:00|2019-08-30 20:45:00|        2201|      28.0|        17031980000|                null|                   76|                  null| 66.75|  0.0|  0.0|  38.5|    105.25|        Cash|Chicago Independents|             41.97907082|            -87.903039661|    POINT (-87.903039...|                     null|                      null|                      null|          1.82|        2.38|
-  |ffd501aba39129119...|b753b6afd94c77370...| 2021-08-20 15:30:00|2019-08-20 17:00:00|        4920|      34.6|               null|                null|                   76|                    70| 86.25|  0.0|  0.0|  10.0|     96.25|        Cash| Top Cab Affiliation|            41.980264315|            -87.913624596|    POINT (-87.913624...|             41.745757713|             -87.708365704|      POINT (-87.708365...|          1.05|        2.49|
-  |fb3633565079410ae...|fc8be1ea1e079a3aa...| 2021-08-08 20:00:00|2019-08-08 20:45:00|        2716|      24.9|               null|                null|                   76|                    39| 61.25|  0.0|  0.0|   6.0|     67.25|        Cash|Chicago Independents|            41.980264315|            -87.913624596|    POINT (-87.913624...|             41.808916283|             -87.596183344|      POINT (-87.596183...|          1.35|        2.46|
-  |ffd14792a18a26f16...|c7cc8a8dd5c3f7358...| 2021-08-20 18:30:00|2019-08-20 19:00:00|        2640|       1.5|        17031980000|                null|                   76|                  null|  61.0| 10.0|  0.0|  36.5|     107.5| Credit Card|Taxi Affiliation ...|             41.97907082|            -87.903039661|    POINT (-87.903039...|                     null|                      null|                      null|          1.39|       40.67|
-  |fd4a5835abbac7700...|b16c8dacd90adaad2...| 2021-08-13 15:00:00|2019-08-13 15:45:00|        3412|      25.6|        17031980000|         17031980100|                   76|                    56|  65.0|  0.0|  0.0|   8.0|      73.0|        Cash|Chicago Independents|             41.97907082|            -87.903039661|    POINT (-87.903039...|             41.785998518|             -87.750934289|      POINT (-87.750934...|          1.14|        2.54|
-  |fd5e21ff80b593e9b...|735f3541fe218b30c...| 2021-08-24 20:30:00|2019-08-24 21:15:00|        2723|     26.07|               null|                null|                 null|                  null| 64.75|  0.0|  0.0|   0.0|     64.75|        Cash|        City Service|                    null|                     null|                    null|                     null|                      null|                      null|          1.43|        2.48|
-  |fdd2a64705eb1afad...|971e9358b7f00c293...| 2021-08-28 20:15:00|2019-08-28 21:00:00|        2280|       1.8|               null|                null|                   76|                    56| 71.75|  0.0|  0.0|   8.0|     79.75| Credit Card|Blue Ribbon Taxi ...|            41.980264315|            -87.913624596|    POINT (-87.913624...|              41.79259236|             -87.769615453|      POINT (-87.769615...|          1.89|       39.86|
-  |fb4fa24acaec50c82...|045270ae331ab6164...| 2021-08-18 07:15:00|2019-08-18 08:00:00|        2504|     24.62|               null|                null|                   31|                  null| 59.25|  0.0|  0.0|   0.0|     59.25|        Cash|           Flash Cab|            41.850266366|            -87.667569312|    POINT (-87.667569...|                     null|                      null|                      null|          1.42|        2.41|
-  |fe2366d577631d660...|82bc059c3b13e9734...| 2021-08-28 22:45:00|2019-08-28 23:30:00|        2759|     28.82|               null|                null|                 null|                    43| 69.75|  2.0|  0.0|   4.0|     76.25| Credit Card|           Flash Cab|                    null|                     null|                    null|             41.761577908|             -87.572781987|      POINT (-87.572781...|          1.52|        2.42|
-  |fc9e54889457c5ed8...|4243ab34318764eb5...| 2021-08-10 22:00:00|2019-08-10 22:30:00|        2031|      26.9|               null|                null|                   28|                  null| 65.25|  0.0|  1.5| 37.75|     104.5|        Cash|          Globe Taxi|            41.874005383|             -87.66351755|    POINT (-87.663517...|                     null|                      null|                      null|          1.93|        2.43|
-  |fb41bc19a5a16aeb0...|82bc059c3b13e9734...| 2021-08-09 17:30:00|2019-08-09 18:15:00|        2531|     32.37|               null|         17031980000|                 null|                    76|  77.5|  0.0|  0.0|   7.5|      85.0|        Cash|           Flash Cab|                    null|                     null|                    null|              41.97907082|             -87.903039661|      POINT (-87.903039...|          1.84|        2.39|
-  |179fb24614832d0d9...|11a881b7291dab7fe...| 2022-02-01 18:00:00|2019-02-01 18:45:00|        2915|     25.25|               null|                null|                   76|                    41|  60.5| 13.1|  0.0|   4.5|      78.6| Credit Card|    Medallion Leasin|            41.980264315|            -87.913624596|    POINT (-87.913624...|             41.794090253|             -87.592310855|      POINT (-87.592310...|          1.25|         2.4|
-  |fadbb95de8548da76...|3563fdd4b400220b2...| 2021-08-22 20:30:00|2019-08-22 21:30:00|        3447|     24.94|               null|                null|                 null|                    41|  63.5| 0.01|  0.0|   5.0|     69.01| Credit Card|           Flash Cab|                    null|                     null|                    null|             41.794090253|             -87.592310855|      POINT (-87.592310...|          1.11|        2.55|
-  |fdf1affca931bcfcc...|f886c7ded2e96ae77...| 2021-08-01 12:15:00|2021-08-01 13:00:00|        3120|      24.2|               null|                null|                   25|                    44| 59.75|  0.0|  0.0|   0.0|     59.75|     Unknown|Blue Ribbon Taxi ...|            41.890608853|            -87.756046711|    POINT (-87.756046...|             41.740205756|             -87.615969523|      POINT (-87.615969...|          1.15|        2.47|
-  +--------------------+--------------------+--------------------+-------------------+------------+----------+-------------------+--------------------+---------------------+----------------------+------+-----+-----+------+----------+------------+--------------------+------------------------+-------------------------+------------------------+-------------------------+--------------------------+--------------------------+--------------+------------+
+  def getOutlier(dFtrips: DataFrame, spark: SparkSession): DataFrame = {
+    val my_schema = StructType(Seq(
+      StructField("Trip Id", StringType, nullable = false)
+    ))
+    var id_dataframe: DataFrame = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], my_schema)
+    dFtrips.columns.foreach { columnName =>
+      if (dFtrips.schema(columnName).dataType.typeName == "double") {
+        val quantiles = dFtrips.stat.approxQuantile(columnName,
+          Array(0.25, 0.75), 0.0)
+        val Q1 = quantiles(0)
+        val Q3 = quantiles(1)
+        val IQR = Q3 - Q1
 
-There is 32328 atypical rows in the relation with Trip Total column
+        val lowerRange = Q1 - 1.5 * IQR
+        val upperRange = Q3 + 1.5 * IQR
+
+        val outliers = dFtrips.filter(col(columnName) < lowerRange || col(columnName) > upperRange).select("Trip Id")
+
+        id_dataframe = id_dataframe.union(outliers)
+      }
+    }
+    id_dataframe.distinct()
+  }
+
+}
 ```
+Here we call this function that we have declared in the helper package, which initially goes through all the columns of the dataframe and filters if the data type is double to these columns, to later be able to detect outliers using the InterQuartileRange method, as a result This function returns us a dataset with all the trip ids that consider that in some of the evaluated columns they contain an atypical data.
+
+```SCALA
+  val dfIdOutliers = FunctionHelpers.getOutlier(tripsdf5, spark)
+  val tripsdf6 = tripsdf5.join(dfIdOutliers,tripsdf5.col("Trip Id") === dfIdOutliers.col("Trip Id"),"left_anti")
+```
+We declare our tripsdf6 variable that appears in the left _ anti join which will allow us to eliminate outliers from our data set to start obtaining new insights
+
 Results 
-* There is 32328 atypical rows in the relation with Trip Total column
+* There is 1323282 atypical rows 
+* We now have 15,151,347 data points in our data set
 ### Insights
+For the insights we are going to declare 2 functions that will allow us to be able to represent the best results, both the amounts and the ratios
+```SCALA
+val currencyFormat: Column => Column = (number: Column) => concat(lit("$"), format_number(number, 2))
+val percentageFormat: Column => Column = (number: Column) => concat(format_number(number * 100, 2), lit(" %"))
+```
+We also use optimization techniques in iterative and interactive Spark applications to improve the performance of Jobs. For this we will use Persist as shown in the code below.
+```SCALA
+  tripsdf6.persist(StorageLevel.MEMORY_AND_DISK)
+```
+
 1.Top Companies with canceled trips
 ```SCALA
    // Company with Trips truncateds

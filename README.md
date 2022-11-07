@@ -258,13 +258,13 @@ There is 1 Rows
   |e8100e2c42456a7c0...|131107e9f0f51399b...| 2019-01-03 09:00:00|2019-01-03 09:00:00|           0|       0.0|               null|                null|                   46|                  null| 0.0| 0.0|  0.0|   0.0|       0.0|        Cash|Taxi Affiliation ...|            41.741242728|            -87.551428197|    POINT (-87.551428...|                     null|                      null|                      null|          null|        null|
   |f7f7f5a11d8a036b7...|d41ab2be597b82c3e...| 2019-01-03 14:15:00|2019-01-03 14:15:00|           0|       0.0|               null|                null|                 null|                  null| 0.0| 0.0|  0.0|   0.0|       0.0|        Cash|Choice Taxi Assoc...|                    null|                     null|                    null|                     null|                      null|                      null|          null|        null|
   +--------------------+--------------------+--------------------+-------------------+------------+----------+-------------------+--------------------+---------------------+----------------------+----+----+-----+------+----------+------------+--------------------+------------------------+-------------------------+------------------------+-------------------------+--------------------------+--------------------------+--------------+------------+
-only showing top 20 rows
+
 
 There is 5710 Rows
 ```
 Results 
 * As a result, it is obtained that by the first criterion only 1 has been eliminated.
-* With the second criterion, 5710 have been eliminated
+* With the second criterion, 5710 rows have been eliminated
 
 ### Outliers
 Outliers are data points in a dataset which stand far from other data points.
@@ -333,7 +333,7 @@ Here we call this function that we have declared in the helper package, which in
 We declare our tripsdf6 variable that appears in the left _ anti join which will allow us to eliminate outliers from our data set to start obtaining new insights
 
 Results 
-* There is 1323282 atypical rows 
+* There is 1,323,282 atypical rows 
 * We now have 15,151,347 data points in our data set
 ### Insights
 For the insights we are going to declare 2 functions that will allow us to be able to represent the best results, both the amounts and the ratios
@@ -345,85 +345,51 @@ We also use optimization techniques in iterative and interactive Spark applicati
 ```SCALA
   tripsdf6.persist(StorageLevel.MEMORY_AND_DISK)
 ```
-
-1.Top Companies with canceled trips
+1.Top companies benefited from the cancellation charge
 ```SCALA
-   // Company with Trips truncateds
-val lowDf = dfCleaned_2.groupBy("Company")
-  .agg(count("*").as("total_trips"))
-  .orderBy(col("total_trips").desc_nulls_last)
 
-lowDf.show()
-+--------------------+-----------+
-|             Company|total_trips|
-+--------------------+-----------+
-|Taxi Affiliation ...|       1934|
-|Taxicab Insurance...|       1569|
-|Star North Manage...|        758|
-|Blue Ribbon Taxi ...|        503|
-|Choice Taxi Assoc...|        285|
-| Top Cab Affiliation|        210|
-|           Flash Cab|        113|
-|Chicago Independents|         75|
-|KOAM Taxi Associa...|         62|
-|Chicago Medallion...|         57|
-|Suburban Dispatch...|         34|
-|Taxi Affiliation ...|         19|
-|        City Service|         15|
-|3094 - 24059 G.L....|         11|
-|    Medallion Leasin|         10|
-|5062 - 34841 Sam ...|          8|
-|312 Medallion Man...|          8|
-|3721 - Santamaria...|          8|
-|           U Taxicab|          6|
-|6574 - Babylon Ex...|          5|
-+--------------------+-----------+
-only showing top 20 rows
+//which company is more benefited with the cancellation charges
+val charguesDF = tripsdf3
+  .filter(col("Trip Miles") === 0 && col("Trip Seconds") === 0.0)
+  .groupBy("Company").agg(round(sum("Trip Total"), 2).as("Amount_Total"))
+  .orderBy(col("Amount_Total").desc_nulls_last)
 
-```
-The report shows the top 20 company with the highest numbers of canceled trips, it is filtered by Trip Miles in 0 and Trips second in 0 . It is also ordered by the Trip_total by descending. The reports has been construct with the dataframe Tripsdf5
+charguesDF.select(
+  col("Company"),
+  currencyFormat(col("Amount_Total").alias("Amount_Total")),
+).show()
 
-2.Top companies benefited from the cancellation charge
-```SCALA
-     val charguesDF = tripsdf5
-    .filter(col("Trip Miles") === 0 && col("Trip Seconds") === 0)
-    .groupBy("Company").agg(sum("Trip Total").as("Trip_Total"))
-    .orderBy(col("Trip_Total").desc_nulls_last)
-      charguesDF.show()
-
-  +--------------------+----------+
-  |             Company|Trip_Total|
-  +--------------------+----------+
-  |Taxi Affiliation ...|1836511.14|
-  |Suburban Dispatch...|1258401.01|
-  |Star North Manage...| 357368.76|
-  |Blue Ribbon Taxi ...| 332000.38|
-  |Choice Taxi Assoc...| 171175.54|
-  |    Medallion Leasin| 136059.35|
-  |Taxicab Insurance...| 101152.84|
-  | Top Cab Affiliation|   99542.6|
-  |Chicago Independents|  31299.26|
-  |          Globe Taxi|   26179.1|
-  |            Sun Taxi|  17649.77|
-  |KOAM Taxi Associa...|  17364.84|
-  |Chicago Medallion...|  16995.54|
-  |        City Service|  15120.58|
-  |Nova Taxi Affilia...|    4456.8|
-  |312 Medallion Man...|   4190.98|
-  |     Chicago Taxicab|   3563.07|
-  |     Petani Cab Corp|   3511.39|
-  |       24 Seven Taxi|   3159.59|
-  |Patriot Taxi Dba ...|   2585.14|
-  +--------------------+----------+
+  +--------------------+------------------+
+  |             Company|      Amount_Total|
+  +--------------------+------------------+
+  |Taxi Affiliation ...|     $1,836,511.14|
+  |Suburban Dispatch...|     $1,258,401.01|
+  |Star North Manage...|       $357,368.76|
+  |Blue Ribbon Taxi ...|       $332,000.38|
+  |Choice Taxi Assoc...|       $171,175.54|
+  |    Medallion Leasin|       $136,059.35|
+  |Taxicab Insurance...|       $101,152.84|
+  | Top Cab Affiliation|        $99,542.60|
+  |Chicago Independents|        $31,299.26|
+  |          Globe Taxi|        $26,179.10|
+  |            Sun Taxi|        $17,649.77|
+  |KOAM Taxi Associa...|        $17,364.84|
+  |Chicago Medallion...|        $16,995.54|
+  |        City Service|        $15,120.58|
+  |Nova Taxi Affilia...|         $4,456.80|
+  |312 Medallion Man...|         $4,190.98|
+  |     Chicago Taxicab|         $3,563.07|
+  |     Petani Cab Corp|         $3,511.39|
+  |       24 Seven Taxi|         $3,159.59|
+  |Patriot Taxi Dba ...|         $2,585.14|
+  +--------------------+------------------+
 ```
 The report shows the top 20 company with the highest numbers of Amount for trip cancellations , it is filtered by Trip Miles in 0 and Trips second in 0 . It is also ordered by the Trip_total by descending. The reports has been construct with the dataframe Tripsdf5
-
-
 
 2.What are the distribution of Taking a taxi Per Hour?
 ```SCALA
      //Pick Hours
-     val pickupsHoursDF = tripsdf5
+     val pickupsHoursDF = tripsdf6
        .withColumn("Hour of the day",hour(col("Trip End Timestamp")))
        .groupBy("Hour of the day")
        .agg(count("*").as("TotalTrips"))
@@ -461,7 +427,7 @@ This report shows the distribution of the Activity of taking taxi by hours. For 
 3.Pickups Community Area with most trips
 ```SCALA
 // Pickups Community Area with most trips
-val Community_trips_picksDf = tripsdf5.groupBy("Pickup Community Area")
+val Community_trips_picksDf = tripsdf6.groupBy("Pickup Community Area")
   .agg(count("*").as("total_trips"))
   .join(Community,col("Id_Com") === col("Pickup Community Area"))
   .orderBy(col("total_trips").desc_nulls_last)
@@ -493,9 +459,12 @@ Community_trips_picksDf.show()
 only showing top 20 rows
 ```
 The report shows the count number of the pickup trips made by Community area , the report contains a inner join Between Community and tripsdf5
+
+
 4.Dropoff Community Area with most trips
+
 ```SCALA
-val Community_trips_DropsDf = tripsdf5.groupBy("Dropoff Community Area")
+val Community_trips_DropsDf = tripsdf6.groupBy("Dropoff Community Area")
   .agg(count("*").as("total_trips"))
   .join(Community, col("Id_Com") === col("Dropoff Community Area"))
   .orderBy(col("total_trips").desc_nulls_last)
@@ -525,92 +494,112 @@ Community_trips_DropsDf.show()
 |                    21|      42326|    21|       Avondale|
 |                    14|      40906|    14|    Albany Park|
 +----------------------+-----------+------+---------------+
-only showing top 20 rows
+
 
 ```
 The report shows the count number of the Dropoff trips made by Community area , the report contains a inner join Between Community and tripsdf5 
 
 5. Average price per Minute grouped by company
 ```SCALA
-val Month_AvgMinuteDF = tripsdf5
-  .withColumn("Month",month(col("Trip End Timestamp")))
+val Year_AvgMinuteDF = tripsdf6
+  .withColumn("Month", month(col("Trip End Timestamp")))
   .groupBy("Month")
-  .agg(round(avg("price x Minute"),2).as("Avg price x Minute"))
+  .agg(round(avg("price x Minute"), 2).as("Avg price x Minute"))
   .orderBy(col("Month").desc)
 
-+-----+------------------+
-|Month|Avg price x Minute|
-+-----+------------------+
-|   12|              1.18|
-|   11|              1.18|
-|   10|              1.13|
-|    9|              1.12|
-|    8|               1.1|
-|    7|              1.08|
-|    6|              1.11|
-|    5|              1.12|
-|    4|              1.16|
-|    3|              1.29|
-|    2|              1.18|
-|    1|              1.26|
-+-----+------------------+
+Year_AvgMinuteDF.select(
+  col("Month"),
+  currencyFormat(col("Avg price x Minute").alias("Avg price x Minute")),
+).show()
+  +-----+-------------------+
+  |Month|`Avg price x Minute`
+  +-----+-------------------+
+  |   12|              $1.18|
+  |   11|              $1.18|
+  |   10|              $1.13|
+  |    9|              $1.12|
+  |    8|              $1.10|
+  |    7|              $1.08|
+  |    6|              $1.11|
+  |    5|              $1.12|
+  |    4|              $1.16|
+  |    3|              $1.29|
+  |    2|              $1.18|
+  |    1|              $1.26|
+  +-----+-------------------+
 
 ```
 The report shows the AVG price x minute of the trips by Company , the report contains a ratio the is calculated like Fare /Minutes .This gives us some information about the quality of service
 
 6. Average price per Mile grouped by company
 ```SCALA
-   val Month_AvgMilesDF = tripsdf5
-  .withColumn("Month", month(col("Trip End Timestamp")))
-  .groupBy("Month")
-  .agg(round(avg("price x Mile"), 2).as("Avg price x Mile"))
-  .orderBy(col("Month").desc)
+ val Company_service_qlty = tripsdf5
+  .groupBy("Company")
+  .agg(round(sum(col("Tips"))/sum(col("Trip Miles")),3).alias("Ratio of tips x Mile"))
+  .orderBy(col("Ratio of tips x Mile").desc)
+
+Company_service_qlty.select(
+  col("Company"),
+  currencyFormat(col("Ratio of tips x Mile").as("Ratio of tips x Mile")),
+).show()
+
 
 Month_AvgMilesDF.show()
-+-----+----------------+
-|Month|Avg price x Mile|
-+-----+----------------+
-|   12|           13.23|
-|   11|           12.54|
-|   10|           10.33|
-|    9|           10.91|
-|    8|           10.27|
-|    7|           10.16|
-|    6|           10.41|
-|    5|           10.25|
-|    4|           10.62|
-|    3|           11.52|
-|    2|           10.43|
-|    1|            11.0|
-+-----+----------------+
+  +-----+----------------+
+  |Month|Avg price x Mile|
+  +-----+----------------+
+  |   12|          $13.23|
+  |   11|          $12.54|
+  |   10|          $10.33|
+  |    9|          $10.91|
+  |    8|          $10.27|
+  |    7|          $10.16|
+  |    6|          $10.41|
+  |    5|          $10.25|
+  |    4|          $10.62|
+  |    3|          $11.52|
+  |    2|          $10.43|
+  |    1|          $11.00|
+  +-----+----------------+
 ```
 The report shows the AVG price x Mile of the trips by Company , the report contains a ratio the is calculated like Fare /Miles .This gives us some information about the quality of service
 
 7.Ratios of tip by Company
 ```SCALA
-             Company|Ratio of tips|
-+--------------------+-------------+
-|Blue Ribbon Taxi ...|        5.018|
-|1469 - 64126 Omar...|        0.662|
-|6574 - Babylon Ex...|        0.623|
-|Chicago Star Taxicab|        0.594|
-|Taxi Affiliation ...|        0.594|
-|3591 - 63480 Chuk...|        0.576|
-|3011 - 66308 JBL ...|        0.573|
-|3721 - Santamaria...|        0.554|
-|5006 - 39261 Sali...|        0.547|
-|5062 - 34841 Sam ...|        0.541|
-|1085 - 72312 N an...|        0.519|
-|3094 - 24059 G.L....|        0.514|
-|Choice Taxi Assoc...|        0.509|
-|3620 - 52292 Davi...|        0.506|
-|     Gold Coast Taxi|        0.499|
-|Chicago Medallion...|        0.499|
-|4787 - 56058 Reny...|        0.498|
-|Taxicab Insurance...|        0.497|
-|2733 - 74600 Benn...|        0.495|
-|4623 - 27290 Jay Kim|        0.489|
-+--------------------+-------------+
+val Company_service_qlty = tripsdf5
+  .groupBy("Company")
+  .agg(round(sum(col("Tips"))/sum(col("Trip Miles")),3).alias("Ratio of tips x Mile"))
+  .orderBy(col("Ratio of tips x Mile").desc)
+
+Company_service_qlty.select(
+  col("Company"),
+  currencyFormat(col("Ratio of tips x Mile").as("Ratio of tips x Mile")),
+).show()
+
+  +--------------------+--------------------+
+  |             Company|Ratio of tips x Mile|
+  +--------------------+--------------------+
+  |Blue Ribbon Taxi ...|               $1.02|
+  |1469 - 64126 Omar...|               $0.66|
+  |6574 - Babylon Ex...|               $0.62|
+  |Taxi Affiliation ...|               $0.59|
+  |Chicago Star Taxicab|               $0.59|
+  |3591 - 63480 Chuk...|               $0.58|
+  |3011 - 66308 JBL ...|               $0.57|
+  |3721 - Santamaria...|               $0.55|
+  |5006 - 39261 Sali...|               $0.55|
+  |5062 - 34841 Sam ...|               $0.54|
+  |1085 - 72312 N an...|               $0.52|
+  |3094 - 24059 G.L....|               $0.51|
+  |Choice Taxi Assoc...|               $0.51|
+  |3620 - 52292 Davi...|               $0.51|
+  |Chicago Medallion...|               $0.50|
+  |     Gold Coast Taxi|               $0.50|
+  |4787 - 56058 Reny...|               $0.50|
+  |Taxicab Insurance...|               $0.50|
+  |2733 - 74600 Benn...|               $0.49|
+  |4623 - 27290 Jay Kim|               $0.49|
+  +--------------------+--------------------+
 ```
 The report shows the Ratio tips of the trips by Company , the report contains a ratio the is calculated like Trips /Miles .This gives us some information about the quality of service
 
@@ -618,36 +607,42 @@ The report shows the Ratio tips of the trips by Company , the report contains a 
 ```SCALA
 //paymemt method per month
 val Year_Payment_type = tripsdf5
-.withColumn("month", month(col("Trip End Timestamp")))
-.groupBy("month","Payment Type")
-.agg(round(sum("Trip Total"),3).as("Trip Total"))
-.orderBy(col("month").desc,col("Trip Total").desc)
+  .withColumn("month", month(col("Trip End Timestamp")))
+  .groupBy("month","Payment Type")
+  .agg(round(sum("Trip Total"),3).as("Amount Total"))
+  .orderBy(col("month").desc,col("Amount Total").desc)
 
-Year_Payment_type.show()
+Year_Payment_type.select(
+  col("month"),
+  col("Payment Type"),
+  currencyFormat(col("Amount Total").as("Amount Total")),
+).show()
 
-  |month|Payment Type|   Trip Total|
-  +-----+------------+-------------+
-  |   12| Credit Card|  10650434408|
-  |   12|        Cash|   7246084.15|
-  |   12|      Mobile|    404939.51|
-  |   12|      Prcard|     326786.9|
-  |   12|     Unknown|    159138.54|
-  |   12|   No Charge|     18806.69|
-  |   12|     Dispute|      6730.77|
-  |   12|     Prepaid|       1157.0|
-  |   11| Credit Card|  11965513667|
-  |   11|        Cash|   7172237.05|
-  |   11|      Mobile|    416781.56|
-  |   11|      Prcard|    302079.86|
-  |   11|     Unknown|    155480.07|
-  |   11|   No Charge|      21768.1|
-  |   11|     Dispute|      8178.15|
-  |   11|     Prepaid|      1125.25|
-  |   10| Credit Card|  15167604457|
-  |   10|        Cash|   7999339.86|
-  |   10|      Mobile|    489506.07|
-  |   10|      Prcard|    298707.58|
-  +-----+------------+-------------+
+
+  -----+------------+------------------------+
+  |month|Payment Type|           Amount Total|
+  +-----+------------+-----------------------+
+  |   12| Credit Card|         $10,650,434.08|
+  |   12|        Cash|          $7,246,084.15|
+  |   12|      Mobile|            $404,939.51|
+  |   12|      Prcard|            $326,786.90|
+  |   12|     Unknown|            $159,138.54|
+  |   12|   No Charge|             $18,806.69|
+  |   12|     Dispute|              $6,730.77|
+  |   12|     Prepaid|              $1,157.00|
+  |   11| Credit Card|         $11,965,513.66|
+  |   11|        Cash|          $7,172,237.05|
+  |   11|      Mobile|            $416,781.56|
+  |   11|      Prcard|            $302,079.86|
+  |   11|     Unknown|            $155,480.07|
+  |   11|   No Charge|             $21,768.10|
+  |   11|     Dispute|              $8,178.15|
+  |   11|     Prepaid|              $1,125.25|
+  |   10| Credit Card|         $15,167,604.45|
+  |   10|        Cash|          $7,999,339.86|
+  |   10|      Mobile|            $489,506.07|
+  |   10|      Prcard|            $298,707.58|
+  +-----+------------+-----------------------+
 ```
 The report shows the Amount of the trip total of the trips by Month and Payment type  , the report contains the sum of trip total 
 

@@ -663,4 +663,176 @@ tripsByLengthDF.show()
 +------+--------+
 
 ```
-To make this report, a long Distance Threshold variable has been declared, which will be our parameter to determine if the trip is short or long. This parameter has been determined this way because it is the number of miles it takes to cross the city.
+To make this report, a long Distance Threshold variable has been declared, which will be our parameter to determine if the trip is short or long. 
+This parameter has been determined this way because it is the number of miles it takes to cross the city.
+
+### Storing report files in GCP
+
+In order to store our files that we are going to generate, it is necessary to follow the following steps
+
+1 .  Add a new dependency library 
+
+We need to add a dependency library that gives us Implementation of org.apache.hadoop.fs.FileSystem targeting Google Cloud Storage
+
+```SCALA
+libraryDependencies ++= Seq(
+ 
+  "com.google.cloud.bigdataoss" % "gcs-connector"%"hadoop3-2.0.0"
+
+```
+2 . Create a Service account 
+
+Grant the Service Account the following roles as shown. Please make sure you assign the least required privileges/roles
+
+![1](src/main/scala/imgs/ServiceAccount.JPG)
+
+3 . Download the key as a json file
+
+Once we have created our account, we must generate a key. This can be done in the actions section. Once generated, 
+we must download the json file for later use.
+
+4 . Generate a variable to store our configurations
+
+Once the previous steps have been completed, you must create a configuration that we will use for our project, 
+for this we must be clear about the location of the json file that was generated from the key
+
+```SCALA
+  val sparkConf = new SparkConf()
+  .set("spark.driver.allowMultipleContexts", "true")
+  .set("spark.hadoop.google.cloud.auth.service.account.enable", "true")
+  .set("spark.hadoop.google.cloud.auth.service.account.json.keyfile","src/main/resources/keyA.json")
+
+```
+
+5 . Indicate the new configuration
+
+when we are building our SparkSession we must indicate our configuration that will be used
+
+```SCALA    
+  val spark = SparkSession.builder()
+    .appName("Ingesta Data")
+    .master("local[*]")
+    .config(sparkConf)
+    .getOrCreate()
+```
+
+6 . Create a bucket in gcp
+
+they are the logical containers for storing objects, 
+like our root folder that stores all our files.
+
+![2](src/main/scala/imgs/Bucket.JPG)
+
+7 . Create a variable containing gsutil URI
+
+The next step to generate a variable that contains the gsutil URI of our bucket
+
+```SCALA    
+  val googleStorageOutput = "gs://taxitrip_report/"
+
+```
+
+8 . Saving our Dataframe Reports
+
+As the last step we are going to save our DataFrame to a CSV file on Our bucket
+
+
+```SCALA  
+charguesDF_R.repartition(1).write.option("header","true")
+.option("sep",";").csv(googleStorageOutput + "Reporte1/")
+```
+
+As a result we will have our files on GCP
+
+![3](src/main/scala/imgs/Result1.JPG)
+![4](src/main/scala/imgs/Result2.JPG)
+
+
+###  From  GCS into BigQuery using Cloud Dataflow
+
+In order to load your files into bigquery, it is necessary to follow the following steps
+
+1 .On the top-right corner of the Cloud Shell, click on the Launch Editor button to see the Cloud Shell and Code Editor in another window
+
+2 .  Assign a PROJECT variable (you can replace it with your project ID)
+```
+export PROJECT=eighth-alchemy-370101
+```
+
+3 . Print the PROJECT variable to be sure that it work
+```
+echo $PROJECT
+```
+
+4 . When the Editor opens, create a new directory where we would store our pipeline programs, and navigate into it. Use these commands:
+```
+mkdir LoadCSV-project
+cd LoadCSV-project/
+```
+5 . Use the Cloud Shell editor to examine the python code for the pipeline. In this repository within the extra folders is the file load-cv.py which we can copy
+
+![5](src/main/scala/imgs/LOADS.JPG)
+
+6 . Upload the key (json) file into LoadCSV-project 
+
+7 . Create a Bucket and name it as your project id
+
+8 . make personalized adjustments for the CSV we want to load 
+
+Here you must specify which delimiter contains your file and which columns your file has
+```PYTHON
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = "/home/jponce/stocks-project/keyA.json"
+class DataIngestion:
+def parse_method(self, string_input):
+values = re.split(";",
+re.sub('\r\n', '', re.sub(u'"', '', string_input)))
+row = dict(
+zip(('isLong','count'),
+values))
+return row
+```
+Here you must specify the default file to be loaded
+```python
+parser.add_argument(
+'--input',
+dest='input',
+required=False,
+help='Input file to read. This can be a local file or '
+'a file in a Google Storage Bucket.',
+default='gs://taxitrip_report/Reporte9/part-00000-38752f8a-9a37-4eb8-ab38-bcfb80d083d9-c000.csv')
+```
+Here you must specify in which dataset your table will be created and in its name
+```python
+parser.add_argument('--output',
+dest='output',
+required=False,
+help='Output BQ table to write results to.',
+default='Taxitrip_Report.Report9')
+```
+as last you must define your Schema
+```python
+schema='isLong:STRING,count:INTEGER',
+```
+
+9 . install Apache Beam for GCP 
+
+```python
+pip install 'apache-beam[gcp]'
+```
+10 .  Run the python application: The below command creates a dataflow job which runs using the DataflowRunner. The pipeline requires a staging location and temp location which are storage buckets  which store processing and temporary files respectively while the pipeline is still running. The input variable is the cloud storage bucket/file location of the csv file(s).
+```
+python load-stocks.py \--project=$PROJECT 
+\--runner=DataflowRunner \--staging_location=gs://$PROJECT/stocks_staging 
+\--temp_location gs://$PROJECT/stocks_temp 
+\--input 'gs://taxitrip_report/Reporte9/part-00000-38752f8a-9a37-4eb8-ab38-bcfb80d083d9-c000.csv' 
+\--region us-east1 
+\--save_main_session
+```
+
+Here we can see the job Graph 
+
+![6](src/main/scala/imgs/job.JPG)
+
+As a result we have uploaded all our report files to bigquery
+
+![7](src/main/scala/imgs/finish.JPG)

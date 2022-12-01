@@ -12,15 +12,21 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.sql.{Column, DataFrame, SaveMode}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.expressions.Window
+import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
 
 object Ingesta extends App {
 
+  val sparkConf = new SparkConf()
+    .set("spark.driver.allowMultipleContexts", "true")
+    .set("spark.hadoop.google.cloud.auth.service.account.enable", "true")
+    .set("spark.hadoop.google.cloud.auth.service.account.json.keyfile","src/main/resources/keyA.json")
 
   val spark = SparkSession.builder()
     .appName("Ingesta Data")
-    .config("spark.master", "local[*]")
+    .master("local[*]")
+    .config(sparkConf)
     .getOrCreate()
 
   val Community = spark.read
@@ -37,8 +43,10 @@ object Ingesta extends App {
       .option("sep", ",")
       .csv("src/main/resources/Taxi_Trips_-_2019.csv")
 
+  val googleStorageOutput = "gs://taxitrip_report/"
 
-  val currencyFormat: Column => Column = (number: Column) => concat(lit("$"), format_number(number, 2))
+
+  val currencyFormat: Column => Column = (number: Column) =>concat(lit("$ "),format_number(number,2))
   val percentageFormat: Column => Column = (number: Column) => concat(format_number(number * 100, 2), lit(" %"))
   //tripsDF.show()
 
@@ -46,10 +54,10 @@ object Ingesta extends App {
 
   println("There is " + tripsDF.count() + " Rows in the dataset")
   println("There is " + tripsDF.distinct().count() + "Unique Row in the dataset")
-  println("there is "+ tripsDF.columns.size + " Number of Columns")
+  println("there is " + tripsDF.columns.size + " Number of Columns")
 
 
-  val stats_df = tripsDF.describe("Trip Seconds","Trip Miles","Fare","Tips","Tolls","Extras","Trip Total")
+  val stats_df = tripsDF.describe("Trip Seconds", "Trip Miles", "Fare", "Tips", "Tolls", "Extras", "Trip Total")
   stats_df.show()
 
 
@@ -71,7 +79,7 @@ object Ingesta extends App {
 
   Quantities.show()
 
-  */
+
 
   //Data Preparation
 
@@ -124,8 +132,6 @@ object Ingesta extends App {
   println("There is " + dfCleaned_2.count() + " Rows")
 
 
-
-
   //Company with Trips truncateds
   val lowDf = dfCleaned_2.groupBy("Company")
     .agg(count("*").as("total_trips"))
@@ -133,31 +139,36 @@ object Ingesta extends App {
 
   lowDf.show()
 
+//Outliers
 
-  //Outliers
+val dfIdOutliers = FunctionHelper.getOutlier(tripsdf5, spark)
+println(dfIdOutliers.count())
+val tripsdf6 = tripsdf5.join(dfIdOutliers,tripsdf5.col("Trip Id") === dfIdOutliers.col("Trip Id"),"left_anti")
+println(tripsdf6.count())
 
-  val dfIdOutliers = FunctionHelpers.getOutlier(tripsdf5, spark)
-  println(dfIdOutliers.count())
-  val tripsdf6 = tripsdf5.join(dfIdOutliers,tripsdf5.col("Trip Id") === dfIdOutliers.col("Trip Id"),"left_anti")
-  println(tripsdf6.count())
-
-  tripsdf6.persist(StorageLevel.MEMORY_AND_DISK)
 
 
 
   //outliers.show()
   //println("There is "+ outliers.count() + " atypical rows in relation to the Trip Total column")
 
+  tripsdf5.persist(StorageLevel.MEMORY_AND_DISK)
+
+
+
   //which company is more benefited with the cancellation charges
   val charguesDF = tripsdf3
     .filter(col("Trip Miles") === 0 && col("Trip Seconds") === 0.0)
-    .groupBy("Company").agg(round(sum("Trip Total"), 2).as("Amount_Total"))
+    .groupBy("Company").agg(round(sum("Trip Total"),2).as("Amount_Total"))
     .orderBy(col("Amount_Total").desc_nulls_last)
 
-  charguesDF.select(
+  val charguesDF_R = charguesDF.select(
     col("Company"),
-    currencyFormat(col("Amount_Total").alias("Amount_Total")),
-  ).show()
+    (currencyFormat(col("Amount_Total")).as("Amount_Total")))
+
+
+  charguesDF_R.repartition(1).write.option("header","true").option("sep",";").csv(googleStorageOutput + "Reporte1/")
+
 
 
   //Pick Hours
@@ -167,6 +178,7 @@ object Ingesta extends App {
     .agg(count("*").as("TotalTrips"))
     .orderBy(col("TotalTrips").desc_nulls_last)
 
+  pickupsHoursDF.repartition(1).write.option("header","true").option("sep",";").csv(googleStorageOutput + "Reporte2/")
 
 
   // Pickups Community Area with most trips
@@ -174,15 +186,16 @@ object Ingesta extends App {
     .agg(count("*").as("total_trips"))
     .join(Community,col("Id_Com") === col("Pickup Community Area"))
     .orderBy(col("total_trips").desc_nulls_last)
-  Community_trips_picksDf.show()
+
+  Community_trips_picksDf.repartition(1).write.option("header","true").option("sep",";").csv(googleStorageOutput + "Reporte3/")
 
   // Dropoff Community Area whit most trips
   val Community_trips_DropsDf = tripsdf5.groupBy("Dropoff Community Area")
     .agg(count("*").as("total_trips"))
     .join(Community, col("Id_Com") === col("Dropoff Community Area"))
     .orderBy(col("total_trips").desc_nulls_last)
-  Community_trips_DropsDf.show()
 
+  Community_trips_DropsDf.repartition(1).write.option("header","true").option("sep",";").csv(googleStorageOutput + "Reporte4/")
 
   // average price per miles and per minute grouped by year
   val Year_AvgMinuteDF = tripsdf5
@@ -191,10 +204,13 @@ object Ingesta extends App {
     .agg(round(avg("price x Minute"), 2).as("Avg price x Minute"))
     .orderBy(col("Month").desc)
 
-  Year_AvgMinuteDF.select(
+  val Year_AvgMinuteDF_R = Year_AvgMinuteDF.select(
     col("Month"),
-    currencyFormat(col("Avg price x Minute").as("Avg price x Minute")),
-  ).show()
+    (currencyFormat(col("Avg price x Minute")).as("Avg price x Minute")),
+  )
+
+  Year_AvgMinuteDF_R.repartition(1).write.option("header","true").option("sep",";").csv(googleStorageOutput + "Reporte5/")
+
 
 
   val Year_AvgMilesDF = tripsdf5
@@ -204,10 +220,12 @@ object Ingesta extends App {
 
     .orderBy(col("Month").desc)
 
-  Year_AvgMilesDF.select(
+  val Year_AvgMilesDF_R = Year_AvgMilesDF.select(
     col("Month"),
-    currencyFormat(col("Avg price x Mile").alias("Avg price x Mile")),
-  ).show()
+    (currencyFormat(col("Avg price x Mile")).as("Avg price x Mile")),
+  )
+
+  Year_AvgMilesDF_R.repartition(1).write.option("header","true").option("sep",";").csv(googleStorageOutput + "Reporte6/")
 
   //tips por company /quality service
   val Company_service_qlty = tripsdf5
@@ -215,10 +233,11 @@ object Ingesta extends App {
     .agg(round(sum(col("Tips"))/sum(col("Trip Miles")),3).alias("Ratio of tips x Mile"))
     .orderBy(col("Ratio of tips x Mile").desc)
 
-  Company_service_qlty.select(
+  val Company_service_qlty_R = Company_service_qlty.select(
     col("Company"),
-    currencyFormat(col("Ratio of tips x Mile").as("Ratio of tips x Mile")),
-  ).show()
+    (currencyFormat(col("Ratio of tips x Mile")).as("Ratio of tips x Mile")),
+  )
+  Company_service_qlty_R.repartition(1).write.option("header","true").option("sep",";").csv(googleStorageOutput + "Reporte7/")
 
   //paymemt method per month
   val Year_Payment_type = tripsdf5
@@ -227,24 +246,25 @@ object Ingesta extends App {
     .agg(round(sum("Trip Total"),3).as("Amount Total"))
     .orderBy(col("month").desc,col("Amount Total").desc)
 
-  Year_Payment_type.select(
+  val Year_Payment_type_R = Year_Payment_type.select(
     col("month"),
     col("Payment Type"),
-    currencyFormat(col("Amount Total").as("Amount Total")),
-  ).show()
-
+    (currencyFormat(col("Amount Total")).as("Amount Total")),
+  )
+  Year_Payment_type_R.repartition(1).write.option("header","true").option("sep",";").csv(googleStorageOutput + "Reporte8/")
   //Long and Short Trip
 
   val longDistanceThreshold = 30
   val tripsWithLengthDF = tripsdf5.withColumn("isLong", col("Trip Miles") >= longDistanceThreshold)
   val tripsByLengthDF = tripsWithLengthDF.groupBy("isLong").count()
 
+  tripsByLengthDF.repartition(1).write.option("header","true").option("sep",";").csv(googleStorageOutput + "Reporte9/")
 
-  tripsByLengthDF.show()
+
+
+
+
+
 
 }
 
-
-
-
-}

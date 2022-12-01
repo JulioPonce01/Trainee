@@ -1,4 +1,4 @@
-name := "projecto"
+name := "Trainee"
 
 version := "0.1"
 
@@ -21,6 +21,7 @@ libraryDependencies ++= Seq(
   // logging
   "org.apache.logging.log4j" % "log4j-api" % "2.4.1",
   "org.apache.logging.log4j" % "log4j-core" % "2.4.1",
+  "com.google.cloud.bigdataoss" % "gcs-connector"%"hadoop3-2.0.0",
   // postgres for DB connectivity
   "org.postgresql" % "postgresql" % postgresVersion
 )
